@@ -1,3 +1,11 @@
 .DS_Store
 node_modules
 public/build
+polygon/
+raymatching/
+texture/
+texture_Pixel/
+vijing/
+water/
+generative_week_end/
+codevember/
