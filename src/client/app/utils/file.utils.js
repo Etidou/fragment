@@ -175,7 +175,7 @@ export async function saveFiles(files = [], out = []) {
 			}
 		});
 
-		const limitInMb = 100;
+		const limitInMb = 50;
 		const body = {
 			files: [],
 		};
