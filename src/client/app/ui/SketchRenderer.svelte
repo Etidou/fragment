@@ -35,7 +35,9 @@
 	export let paused = false;
 	export let visible = true;
 
-	let node, container;
+	let node;
+	/** @type {HTMLDivElement} */
+	let container;
 	let framerate = 60;
 	let elapsed = 0;
 	let elapsedRenderingTime = 0;
@@ -60,44 +62,46 @@
 	$: beforeRecordCallbacks = $beforeRecord.get(key) || [];
 	$: afterRecordCallbacks = $afterRecord.get(key) || [];
 
-	function checkForResize() {
+	function checkForResize(resizing = $rendering.resizing) {
 		if (!node) return;
 
-		let needsUpdate =
-			$rendering.resizing === SIZES.WINDOW ||
-			$rendering.resizing === SIZES.ASPECT_RATIO;
+		let isWindowResize = resizing === SIZES.WINDOW;
+		let isAspectResize = resizing === SIZES.ASPECT_RATIO;
+		let canUpdate = isWindowResize || isAspectResize;
 
-		let newWidth, newHeight;
+		if (canUpdate) {
+			let newWidth, newHeight;
 
-		if ($rendering.resizing === SIZES.WINDOW) {
-			newWidth = node.offsetWidth;
-			newHeight = node.offsetHeight;
-		} else if ($rendering.resizing === SIZES.ASPECT_RATIO) {
-			const { offsetWidth, offsetHeight } = node;
-			const aspectRatio = $rendering.aspectRatio;
-			const monitorRatio = offsetWidth / offsetHeight;
+			if (isWindowResize) {
+				newWidth = node.offsetWidth;
+				newHeight = node.offsetHeight;
+			} else if (isAspectResize) {
+				const { offsetWidth, offsetHeight } = node;
+				const aspectRatio = $rendering.aspectRatio;
+				const monitorRatio = offsetWidth / offsetHeight;
 
-			if (aspectRatio < monitorRatio) {
-				newHeight = offsetHeight;
-				newWidth = newHeight * aspectRatio;
-			} else {
-				newWidth = offsetWidth;
-				newHeight = newWidth / aspectRatio;
+				if (aspectRatio < monitorRatio) {
+					newHeight = offsetHeight;
+					newWidth = newHeight * aspectRatio;
+				} else {
+					newWidth = offsetWidth;
+					newHeight = newWidth / aspectRatio;
+				}
 			}
-		}
 
-		needsUpdate =
-			needsUpdate &&
-			(newWidth !== $rendering.width || newHeight !== $rendering.height);
+			let needsUpdate =
+				newWidth !== $rendering.width ||
+				newHeight !== $rendering.height;
 
-		if (needsUpdate) {
-			rendering.update((curr) => {
-				return {
-					...curr,
-					width: newWidth,
-					height: newHeight,
-				};
-			});
+			if (needsUpdate) {
+				rendering.update((curr) => {
+					return {
+						...curr,
+						width: newWidth,
+						height: newHeight,
+					};
+				});
+			}
 		}
 	}
 
@@ -127,9 +131,6 @@
 	});
 
 	function createCanvas(canvas = document.createElement('canvas')) {
-		canvas.width = $rendering.width * $rendering.pixelRatio;
-		canvas.height = $rendering.height * $rendering.pixelRatio;
-
 		canvas.onmousedown = (event) => checkForTriggersDown(event, key);
 		canvas.onmousemove = (event) => checkForTriggersMove(event, key);
 		canvas.onmouseup = (event) => checkForTriggersUp(event, key);
@@ -202,7 +203,7 @@
 
 		if (canvas) {
 			if (renderer && typeof renderer.onDestroyPreview === 'function') {
-				renderer.onDestroyPreview({ id, canvas });
+				renderer.onDestroyPreview({ id, container, canvas });
 			}
 
 			destroyCanvas(canvas);
@@ -487,30 +488,6 @@
 		}
 	}
 
-	rendering.subscribe((current) => {
-		if (canvas && _created) {
-			if (current.resizing === SIZES.SCALE) {
-				canvas.style.transform = `scale(${current.scale})`;
-			} else {
-				canvas.style.transform = null;
-			}
-
-			const { width, height, pixelRatio } = current;
-			const resize = sketch.resize || noop;
-
-			resize({
-				canvas,
-				width,
-				height,
-				pixelRatio,
-				...params,
-			});
-
-			_renderSketch = createRenderLoop();
-			needsRender = true;
-		}
-	});
-
 	async function save() {
 		paused = true;
 
@@ -649,21 +626,38 @@
 	$: {
 		checkForResize();
 
+		const { width, height, pixelRatio, resizing, scale } = $rendering;
+
 		if (renderer && typeof renderer.onResizePreview === 'function') {
 			renderer.onResizePreview({
 				id,
 				container,
-				width: $rendering.width,
-				height: $rendering.height,
-				pixelRatio: $rendering.pixelRatio,
+				width,
+				height,
+				pixelRatio,
+				...params,
 			});
 		}
 
 		if (canvas) {
-			const pixelRatio = $rendering.pixelRatio;
+			if (resizing === SIZES.SCALE) {
+				canvas.style.transform = `scale(${scale})`;
+			} else {
+				canvas.style.transform = null;
+			}
 
-			canvas.width = $rendering.width * pixelRatio;
-			canvas.height = $rendering.height * pixelRatio;
+			if (_created) {
+				sketch?.resize?.({
+					canvas,
+					width,
+					height,
+					pixelRatio,
+					...params,
+				});
+
+				_renderSketch = createRenderLoop();
+				_renderSketch();
+			}
 		}
 	}
 
@@ -680,6 +674,10 @@
 						)) // if none of current monitors match the key
 				? $errors.get($errors.keys().next().value)
 				: null;
+
+	$: isSquare = $rendering.width === $rendering.height;
+	$: isLandscape = $rendering.width > $rendering.height;
+	$: isPortrait = $rendering.width < $rendering.height;
 </script>
 
 <div
@@ -691,7 +689,7 @@
 >
 	<div
 		class="canvas-container"
-		style="max-width: {$rendering.width}px; max-height: {$rendering.height}px;"
+		style="--aspect-ratio: {$rendering.width} / {$rendering.height}; --aspect-ratio-inverse: {$rendering.height} / {$rendering.width}; --width: {$rendering.width}px; --height: {$rendering.height}px;"
 		bind:this={container}
 	/>
 	{#if $recording}
@@ -709,7 +707,6 @@
 
 <style>
 	.sketch-renderer {
-		position: absolute;
 		display: flex;
 		width: 100%;
 		height: 100%;
@@ -717,6 +714,8 @@
 		align-items: center;
 
 		background-color: var(--background-color, var(--color-lightblack));
+
+		container-type: size;
 	}
 
 	.sketch-renderer:not(.visible) {
@@ -724,13 +723,27 @@
 	}
 
 	.canvas-container {
+		--w: min(100cqw, calc(100cqh * var(--aspect-ratio)));
 		position: relative;
-		display: flex;
-		flex-direction: column;
-		justify-content: center;
-		align-items: center;
-		height: 100%;
-		max-height: 100%;
+
+		max-width: var(--width);
+		max-height: var(--height);
+
+		width: var(--w);
+		height: calc(var(--w) * var(--aspect-ratio-inverse));
+
+		background-color: red;
+	}
+
+	:global(.canvas-container canvas) {
+		position: absolute;
+		top: 0;
+		left: 0;
+
+		width: 100% !important;
+		height: 100% !important;
+
+		background-color: var(--background-color, #000000);
 	}
 
 	.sketch-renderer.recording .canvas-container {
@@ -782,17 +795,5 @@
 		100% {
 			opacity: 0;
 		}
-	}
-
-	:global(.canvas-container canvas) {
-		max-width: 100%;
-		max-height: 100%;
-
-		flex: none;
-
-		width: auto !important;
-		height: auto !important;
-
-		background-color: var(--background-color, #000000);
 	}
 </style>
