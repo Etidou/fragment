@@ -28,6 +28,7 @@ prog.command('run [entry]', '', { default: true })
 	.option('--outDir', 'Build output directory')
 	.option('--emptyOutDir', 'Empty outDir before static build')
 	.option('--base', 'Base public path when served in production', undefined)
+	.option('--config', 'Path to Fragment config file')
 	.option('--prompts', 'Enable interactive prompts', true)
 	.action((entry, options) => {
 		if (options.new) {
@@ -43,6 +44,7 @@ prog.command('run [entry]', '', { default: true })
 				emptyOutDir: options.emptyOutDir,
 				base: options.base,
 				prompts: options.prompts,
+				config: options.config,
 			});
 		}
 
@@ -50,6 +52,7 @@ prog.command('run [entry]', '', { default: true })
 			development: options.development,
 			exportDir: options.exportDir,
 			port: options.port,
+			config: options.config,
 		});
 	});
 
@@ -69,6 +72,7 @@ prog.command('build [entry]')
 	.option('--base', 'Base public path', undefined)
 	.option('-dev, --development', 'Enable development mode', false)
 	.option('--prompts', 'Enable interactive prompts', true)
+	.option('--config', 'Path to Fragment config file')
 	.action((entry, options) => {
 		build(entry, options);
 	});
