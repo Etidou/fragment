@@ -119,6 +119,7 @@ export async function build(entry, options) {
 				mergeConfig(config, {
 					logLevel: 'info',
 					base,
+          assetsInclude: ['**/*.gltf', '**/*.glb', '**/*.hdr'],
 					build: {
 						outDir: outDirPath,
 						emptyOutDir,
