@@ -22,12 +22,17 @@ export let onMountPreview = ({ id, width, height }) => {
 	};
 };
 
-export let onResizePreview = ({ id, width, height, pixelRatio }) => {
+export let onBeforeUpdatePreview = ({ id }) => {
 	const preview = previews.find((p) => p.id === id);
 
 	if (preview) {
-		preview.p.resizeCanvas(width * pixelRatio, height * pixelRatio, false);
+		preview.p.resetMatrix();
 	}
+};
+
+export let onResizePreview = ({ p, width, height, pixelRatio }) => {
+	p.pixelDensity(pixelRatio);
+	p.resizeCanvas(width, height, false);
 };
 
 export let onDestroyPreview = ({ id }) => {
